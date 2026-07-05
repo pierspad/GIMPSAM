@@ -29,6 +29,7 @@ import glob
 import struct
 import json
 import logging
+import math
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
@@ -54,7 +55,7 @@ MODEL_FRIENDLY_LABELS = {
     "sam2_hiera_small": "SAM2 · small",
     "sam2_hiera_base_plus": "SAM2 · base+",
     "sam2_hiera_large": "SAM2 · large",
-    "sam3": "SAM3 · concept segmentation (text prompts, needs a GPU + HF access)",
+    "sam3": "SAM3 · concept segmentation (text prompts, HF access required — runs on CPU too, GPU just makes it faster)",
 }
 
 # SAM3 is a text-prompted "concept segmentation" model rather than a
@@ -206,6 +207,13 @@ class OptionsDialog(Gtk.Dialog):
         # "current configuration" entry if the plug-in was set up by hand.
         self.modelLbl = Gtk.Label(label="Model:", xalign=1)
         self.modelCombo = Gtk.ComboBoxText()
+        # GTK sizes a ComboBoxText to fit only its currently-selected entry,
+        # not the widest one it holds — with labels like "SAM2 · hiera_tiny
+        # (sam2_hiera_tiny.pt)" that made both the closed combo and its
+        # popdown list render too narrow to read at a glance. A fixed
+        # minimum width fixes both at once, since GTK derives the popdown's
+        # width from the combo's own allocation.
+        self.modelCombo.set_size_request(320, -1)
         self._model_paths = []  # combo index -> checkpoint path
 
         self.noModelHintLbl = Gtk.Label(xalign=0)
@@ -363,11 +371,22 @@ class OptionsDialog(Gtk.Dialog):
         egrid.attach(self.cropNLayersChk, 1, erow, 1, 1)
         erow += 1
 
-        self.minMaskAreaLbl = Gtk.Label(label="Minimum Mask Area:", xalign=1)
+        self.minMaskAreaLbl = Gtk.Label(label="Minimum Mask Area (px²):", xalign=1)
         self.minMaskAreaEntry = Gtk.Entry()
         self.minMaskAreaEntry.set_text(str(self.values.minMaskArea))
+        self.minMaskAreaEntry.set_tooltip_text(
+            "Masks smaller than this many pixels are discarded — it's an AREA (width × height), not a "
+            "diameter or side length. 0 keeps everything. The hint below converts it to an equivalent "
+            "brush size so you can judge it visually: pick a circular brush of that diameter and anything "
+            "it can't cover in one dab gets thrown away."
+        )
         egrid.attach(self.minMaskAreaLbl, 0, erow, 1, 1)
         egrid.attach(self.minMaskAreaEntry, 1, erow, 1, 1)
+        erow += 1
+
+        self.minMaskAreaHintLbl = Gtk.Label(xalign=0)
+        self.minMaskAreaHintLbl.set_line_wrap(True)
+        egrid.attach(self.minMaskAreaHintLbl, 0, erow, 2, 1)
         erow += 1
 
         self.maxAutoDimLbl = Gtk.Label(label="Max resolution for Auto (0 = no limit):", xalign=1)
@@ -387,6 +406,8 @@ class OptionsDialog(Gtk.Dialog):
         self.segTypeDropDown.connect("changed", self.update_options_visibility)
         self.modelCombo.connect("changed", self.on_model_combo_changed)
         self.checkPtFileBtn.connect("file-set", self.update_options_visibility)
+        self.minMaskAreaEntry.connect("changed", self.on_min_mask_area_changed)
+        self.on_min_mask_area_changed(self.minMaskAreaEntry)
         if not self.isGrayScale:
             self.randColBtn.connect("toggled", self.on_random_toggled)
 
@@ -486,8 +507,30 @@ class OptionsDialog(Gtk.Dialog):
         self.cropNLayersChk.set_visible(show_auto_options)
         self.minMaskAreaLbl.set_visible(show_auto_options)
         self.minMaskAreaEntry.set_visible(show_auto_options)
+        self.minMaskAreaHintLbl.set_visible(show_auto_options)
         self.maxAutoDimLbl.set_visible(show_auto_options)
         self.maxAutoDimSpin.set_visible(show_auto_options)
+
+    def on_min_mask_area_changed(self, widget):
+        text = self.minMaskAreaEntry.get_text().strip()
+        try:
+            area = int(text)
+        except ValueError:
+            area = None
+        if area is None or area <= 0:
+            self.minMaskAreaHintLbl.set_markup(
+                "<small>0 (or blank) keeps every mask, however small.</small>"
+            )
+            return
+        # Not a real-world constraint on the mask's shape — just a scale
+        # reference: "what's the smallest circular brush dab that would
+        # survive this filter", since px² alone gives most people no
+        # intuition at all for how big a blob that actually is on screen.
+        diameter = 2.0 * math.sqrt(area / math.pi)
+        self.minMaskAreaHintLbl.set_markup(
+            f"<small>≈ the area of a filled circle {diameter:.0f}px across — try setting a brush to "
+            f"that size to see how big that is on your image. Anything smaller than {area}px² is discarded.</small>"
+        )
 
     def on_random_toggled(self, widget):
         is_random = self.randColBtn.get_active()
@@ -1073,7 +1116,7 @@ class SegAnyPlugin(Gimp.PlugIn):
         procedure.add_int_argument("sel-pt-cnt", "Selection points", "Sample points for Selection mode", 1, 1000, 10, flags)
         procedure.add_string_argument("seg-res", "Auto resolution", "Low, Medium or High", "Medium", flags)
         procedure.add_int_argument("crop-n-layers", "Crop n layers", "0 or 1", 0, 1, 0, flags)
-        procedure.add_int_argument("min-mask-area", "Minimum mask area", "Discard masks smaller than this (px)", 0, 10_000_000, 0, flags)
+        procedure.add_int_argument("min-mask-area", "Minimum mask area", "Discard masks smaller than this, in pixels² (area, not diameter) — 0 keeps everything", 0, 10_000_000, 0, flags)
         procedure.add_int_argument("max-auto-dim", "Max Auto resolution", "Downscale before Auto segmentation (0 = off)", 0, 8192, 1024, flags)
         procedure.add_boolean_argument("is-random-color", "Random mask color", "Use a random color per mask layer", True, flags)
 

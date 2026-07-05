@@ -137,6 +137,73 @@ SAM2_PIP_SPEC = "git+https://github.com/facebookresearch/segment-anything-2.git"
 SAM3_HF_PAGE = "https://huggingface.co/facebook/sam3.1"
 SAM3_HF_REPO_ID = "facebook/sam3.1"
 
+# Both installers (this one, and LazyGimp's lazygimp.py, which imports this
+# module purely as a library — see its resolve_gimpsam_installer()) download
+# SAM3 the same way: a one-liner run inside the backend's own venv, because
+# huggingface_hub is a dependency of THAT interpreter, not necessarily of
+# whatever Python is running the installer GUI itself. Shared here so the
+# error-message classification can never drift between the two call sites.
+def build_sam3_download_script(dest: str, token: str) -> str:
+    return (
+        "import sys\n"
+        "from huggingface_hub import snapshot_download\n"
+        "try:\n"
+        f"    snapshot_download(repo_id={SAM3_HF_REPO_ID!r}, local_dir={dest!r}, token={token!r})\n"
+        f"    print('SAM3 checkpoint downloaded to', {dest!r})\n"
+        "except Exception as e:\n"
+        "    msg = str(e)\n"
+        "    low = msg.lower()\n"
+        "    if '403' in msg or 'gated' in low or 'access to public gated repositories' in low:\n"
+        "        print('ERROR-GATED: ' + msg.splitlines()[0])\n"
+        "    elif '401' in msg or ('invalid' in low and 'token' in low) or 'unauthorized' in low:\n"
+        "        print('ERROR-AUTH: ' + msg.splitlines()[0])\n"
+        "    elif 'connect' in low or 'timed out' in low or 'name resolution' in low or 'network' in low:\n"
+        "        print('ERROR-NETWORK: ' + msg.splitlines()[0])\n"
+        "    else:\n"
+        "        print('ERROR-OTHER: ' + msg.splitlines()[0])\n"
+        "    sys.exit(1)\n"
+    )
+
+
+def classify_sam3_failure(lines: list[str]) -> str | None:
+    """Pull the ERROR-* classification tag build_sam3_download_script()
+    prints out of the captured output, if present."""
+    for line in reversed(lines):
+        if line.startswith("ERROR-"):
+            return line
+    return None
+
+
+SAM3_FAILURE_MESSAGES = {
+    "ERROR-GATED": (
+        "Access denied — your Hugging Face account hasn't been approved for {repo} yet. "
+        "Request access at {page}, wait for the approval email, then try again with the same token."
+    ),
+    "ERROR-AUTH": (
+        "The token was rejected (invalid or expired). Generate a fresh read-access token at "
+        "huggingface.co/settings/tokens and paste it in again."
+    ),
+    "ERROR-NETWORK": (
+        "Couldn't reach Hugging Face — check your internet connection (and any proxy/firewall), "
+        "then try again. This is a several-GB download, so a flaky connection is a common cause."
+    ),
+}
+
+
+def sam3_failure_message(tag: str | None) -> str:
+    if tag is None:
+        return (
+            "Couldn't download the SAM3 checkpoint — see the log above for the exact error. "
+            "Double-check the token and your access request, then try again."
+        )
+    kind = tag.split(":", 1)[0].strip()
+    detail = tag.split(":", 1)[1].strip() if ":" in tag else ""
+    template = SAM3_FAILURE_MESSAGES.get(kind)
+    if template is None:
+        return f"Couldn't download the SAM3 checkpoint: {detail or tag}"
+    base = template.format(repo=SAM3_HF_REPO_ID, page=SAM3_HF_PAGE)
+    return f"{base}\n\nDetails: {detail}" if detail else base
+
 
 @dataclass
 class ModelSpec:
@@ -185,7 +252,15 @@ def model_path(spec: ModelSpec) -> str:
 def model_installed(spec: ModelSpec) -> bool:
     p = model_path(spec)
     if spec.family == "SAM3":
-        return os.path.isdir(p) and len(os.listdir(p)) > 0
+        # A snapshot_download() that dies partway through (e.g. the 403 a
+        # gated/unapproved HF repo returns) can still leave a few small
+        # metadata files on disk before it fails — checking "the folder is
+        # non-empty" then wrongly reports the model as installed, which
+        # hides the failure and disables the Install button on next visit.
+        # config.json is one of the last files HF writes for a model repo,
+        # so its presence is a much better signal that the snapshot is
+        # actually complete.
+        return os.path.isdir(p) and os.path.isfile(os.path.join(p, "config.json"))
     return os.path.isfile(p)
 
 
@@ -293,6 +368,27 @@ def plugin_install_status(plugins_dir: str | None) -> tuple[bool, str | None]:
     return os.path.isfile(dest), dest
 
 
+def invalidate_gimp_plugin_cache(log=print) -> None:
+    """GIMP only re-queries a plug-in's procedures when it thinks something
+    changed; that decision is driven by a cache file (pluginrc) sitting next
+    to the plug-ins folder, one per config dir. It is usually kept in sync
+    correctly, but if a previous run of this installer left the plug-in
+    half-installed, or GIMP was left running in the background across an
+    "update", the menu entry can end up missing (or stuck showing the old
+    version) even after a restart. Deleting pluginrc is always safe — GIMP
+    regenerates it from scratch, at the cost of one slightly slower next
+    startup — so do it every time we (re)install the plug-in, rather than
+    trying to guess whether this particular run actually needs it."""
+    for d in gimp_config_dirs():
+        pluginrc = os.path.join(d, "pluginrc")
+        if os.path.isfile(pluginrc):
+            try:
+                os.remove(pluginrc)
+                log(f"Cleared {pluginrc} so GIMP rescans plug-ins on next launch")
+            except OSError as e:
+                log(f"Could not clear {pluginrc}: {e} (not fatal)")
+
+
 def venv_status() -> bool:
     return os.path.isfile(VENV_PYTHON) and os.access(VENV_PYTHON, os.X_OK)
 
@@ -378,6 +474,27 @@ class Job:
         rc = self.proc.returncode
         self.proc = None
         return rc
+
+    def run_cmd_capture(self, cmd: list[str], **kw) -> tuple[int, list[str]]:
+        """Same as run_cmd(), but also hands back every printed line — for
+        callers that need to tell apart *why* a subprocess failed (e.g. a
+        Hugging Face gated-repo 403 vs. an invalid token vs. a plain network
+        error) instead of just its exit code."""
+        if self.cancel_event.is_set():
+            self.log("Cancelled — skipping: " + " ".join(cmd))
+            return -1, []
+        self.log("$ " + " ".join(cmd))
+        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, **kw)
+        lines: list[str] = []
+        for line in iter(self.proc.stdout.readline, ""):
+            if line:
+                clean = line.rstrip("\n")
+                self.log(clean)
+                lines.append(clean)
+        self.proc.wait()
+        rc = self.proc.returncode
+        self.proc = None
+        return rc, lines
 
     def download(self, url: str, dest: str, cancel_event: threading.Event | None = None, progress_cb=None) -> bool:
         import urllib.request
@@ -1329,8 +1446,23 @@ class InstallerApp:
         if anything_installed(self):
             btn_row = tk.Frame(center, bg=BG)
             btn_row.pack(pady=(18, 0))
+            RoundedButton(btn_row, "Close installer and open GIMP", variant="primary", icon="bolt", width=340,
+                          command=self.launch_gimp_and_close).pack(pady=(0, 10))
             RoundedButton(btn_row, "Uninstall GIMPSAM from this system", variant="danger", icon="trash", width=340,
                           command=self.show_uninstall_confirm).pack()
+
+    def launch_gimp_and_close(self):
+        gimp_bin = find_gimp_binary()
+        if not gimp_bin:
+            show_snackbar(self, "GIMP not found on PATH — install it first", tone="error")
+            return
+        try:
+            subprocess.Popen([gimp_bin], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              start_new_session=True)
+        except Exception as e:
+            show_snackbar(self, f"Couldn't launch GIMP: {e}", tone="error")
+            return
+        self.root.destroy()
 
     # ---- uninstall screen -------------------------------------------------
 
@@ -1471,6 +1603,16 @@ class InstallerApp:
         self.hw = detect_hardware()
         self.show_step(self.current_index)
 
+    # Progress tools like pip/tqdm/huggingface_hub rewrite their line in
+    # place with '\r' rather than emitting a real newline per update; when
+    # captured through a pipe that habit can turn into either one very long
+    # literal string, or a flood of separate near-identical lines. A status
+    # bar meant to show exactly one line has no size limit by default, so
+    # either case ends up stretching (and visibly breaking) the whole
+    # window's layout instead of just showing stale-looking text. Clamp and
+    # normalize whatever the log queue hands us so that can never happen.
+    _STATUS_MAX_CHARS = 160
+
     def _drain_log_queue(self):
         last = None
         try:
@@ -1480,8 +1622,11 @@ class InstallerApp:
         except queue.Empty:
             pass
         if last is not None and hasattr(self, "status_var") and self.status_var is not None:
+            clean = " ".join(last.replace("\r", " ").split())
+            if len(clean) > self._STATUS_MAX_CHARS:
+                clean = "…" + clean[-(self._STATUS_MAX_CHARS - 1):]
             try:
-                self.status_var.set(last)
+                self.status_var.set(clean)
             except tk.TclError:
                 pass
         self.root.after(150, self._drain_log_queue)
@@ -1613,6 +1758,7 @@ class InstallerApp:
                     for fname, path in sources.items():
                         shutil.copy2(path, dest_dir)
                         os.chmod(os.path.join(dest_dir, fname), 0o755)
+                    invalidate_gimp_plugin_cache(job.log)
                 except Exception as e:
                     job.log(f"Could not install plug-in files: {e}")
             else:
@@ -1890,6 +2036,7 @@ class PluginStep:
             for fname, path in sources.items():
                 shutil.copy2(path, dest_dir)
                 os.chmod(os.path.join(dest_dir, fname), 0o755)
+            invalidate_gimp_plugin_cache(job.log)
             job.log("Plug-in files installed. Restart GIMP to load the change.")
 
         self.app.run_in_background(task, on_done=lambda: self.app.show_step(1))
@@ -2209,6 +2356,26 @@ class ModelsStep:
             if row.card.winfo_exists():
                 row.render()
 
+    def refresh_sam3_panel(self):
+        """Update the SAM3 card's installed/not-installed bits in place —
+        the same in-place idiom as refresh_rows(), for the same reason: a
+        full self.app.show_step(3) rebuild used to run after every SAM3
+        download/remove/transformers-setup, which threw away the whole
+        scrollable Models list and rebuilt it from scratch at scroll
+        position 0 — i.e. exactly the "jumps back to the top" complaint."""
+        if not hasattr(self, "sam3_status_lbl") or not self.sam3_status_lbl.winfo_exists():
+            return
+        spec = next(m for m in MODEL_REGISTRY if m.family == "SAM3")
+        installed = model_installed(spec)
+        if installed:
+            self.sam3_status_lbl.configure(text="Installed")
+            self.sam3_status_lbl.pack(anchor="w", pady=(4, 0))
+        else:
+            self.sam3_status_lbl.configure(text="")
+            self.sam3_status_lbl.pack_forget()
+        self._sync_sam3_download_enabled()
+        self.sam3_remove_btn.set_enabled(installed)
+
     def on_download_all(self, family):
         specs = [m for m in MODEL_REGISTRY if m.family == family and not model_installed(m)]
         if not specs:
@@ -2231,8 +2398,14 @@ class ModelsStep:
         tk.Label(name_row, text=spec.label, bg=CARD_BG, fg=TEXT, font=("Sans", 12, "bold")).pack(side="left")
         tk.Label(name_row, text=f"   {spec.size}", bg=CARD_BG, fg=TEXT_MUTED, font=("Sans", 9)).pack(side="left")
         rating_widget(left, spec.quality, spec.speed, bg=CARD_BG).pack(anchor="w", pady=(4, 0))
+        # Always created (unlike the old conditional tk.Label) so
+        # refresh_sam3_panel() can just flip its text/visibility in place
+        # after a download/remove finishes, instead of the caller having to
+        # tear down and rebuild this whole panel (and, with it, reset the
+        # Models list's scroll position back to the top).
+        self.sam3_status_lbl = tk.Label(left, text="Installed" if installed else "", bg=CARD_BG, fg=SUCCESS, font=("Sans", 9, "bold"))
         if installed:
-            tk.Label(left, text="Installed", bg=CARD_BG, fg=SUCCESS, font=("Sans", 9, "bold")).pack(anchor="w", pady=(4, 0))
+            self.sam3_status_lbl.pack(anchor="w", pady=(4, 0))
 
         autowrap_label(
             body, "Gated on Hugging Face — request access, get approved, then paste a token below.",
@@ -2291,7 +2464,11 @@ class ModelsStep:
             job.run_cmd([pip, "install", "-U", "transformers", "huggingface_hub"])
             job.log("Done.")
 
-        self.app.run_in_background(task)
+        # No on_done: nothing this step shows depends on transformers being
+        # installed, so there is nothing to refresh — the default
+        # refresh_all() would otherwise rebuild the whole Models step (and
+        # its scroll position) for a change with no visible effect on it.
+        self.app.run_in_background(task, on_done=lambda: None)
 
     def on_download_sam3(self):
         token = self.hf_token.get().strip()
@@ -2302,30 +2479,22 @@ class ModelsStep:
             themed_info(self.app.root, "Backend missing", "Set up the Python backend first.")
             return
 
-        outcome = {"ok": False}
+        outcome = {"ok": False, "tag": None}
 
         def task(job: Job):
             dest = os.path.join(MODELS_DIR, "sam3")
             os.makedirs(dest, exist_ok=True)
-            script = (
-                "from huggingface_hub import snapshot_download\n"
-                f"snapshot_download(repo_id={SAM3_HF_REPO_ID!r}, local_dir={dest!r}, token={token!r})\n"
-                f"print('SAM3 checkpoint downloaded to', {dest!r})\n"
-            )
+            script = build_sam3_download_script(dest, token)
             job.log(f"Downloading {SAM3_HF_REPO_ID} to {dest} (several GB, be patient)")
-            rc = job.run_cmd([VENV_PYTHON, "-c", script])
+            rc, lines = job.run_cmd_capture([VENV_PYTHON, "-c", script])
             outcome["ok"] = rc == 0
+            outcome["tag"] = classify_sam3_failure(lines)
             job.log("SAM3 checkpoint ready." if outcome["ok"] else "Download failed.")
 
         def done():
-            self.app.show_step(3)
+            self.refresh_sam3_panel()
             if not outcome["ok"]:
-                themed_info(
-                    self.app.root, "Download failed",
-                    "Couldn't download the SAM3 checkpoint. This usually means the token is invalid or "
-                    "expired, or your Hugging Face account hasn't been approved for facebook/sam3.1 yet. "
-                    "Double-check the token and your access request, then try again.",
-                )
+                themed_info(self.app.root, "Download failed", sam3_failure_message(outcome["tag"]))
 
         self.app.run_in_background(task, on_done=done)
 
@@ -2344,7 +2513,7 @@ class ModelsStep:
             except Exception as e:
                 job.log(f"ERROR removing {dest}: {e}")
 
-        self.app.run_in_background(task, on_done=lambda: self.app.show_step(3))
+        self.app.run_in_background(task, on_done=self.refresh_sam3_panel)
 
 
 def main():
