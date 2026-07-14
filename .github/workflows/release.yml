@@ -1,39 +1,52 @@
-name: Create Release
+# ---------------------------------------------------------------------------
+# Release (semantic-release) — stesso design di vesta/LazyGimp.
+#
+# Ogni push su main/dev analizza i conventional commits (feat → minor,
+# fix/perf/refactor → patch, feat!/BREAKING CHANGE → major):
+#   - main → release stabile (vX.Y.Z), marcata Latest su GitHub
+#   - dev  → prerelease (vX.Y.Z-dev.N), marcata Pre-release, mai Latest
+#
+# La release include lo zip del plugin GIMP 3 buildato in prepareCmd
+# (vedi .releaserc). Niente più tag manuali.
+# ---------------------------------------------------------------------------
+name: Release (semantic-release)
 
 on:
   push:
-    tags:
-      - '*'
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  release:
+    name: Release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Create GIMP 3 Plugin Zip
-        run: |
-          mkdir seganyplugin
-          cp seganyplugin.py seganybridge.py seganyplugin/
-          zip -r gimp-segany-gimp3.zip seganyplugin
-
-      # - name: Create GIMP 2 Plugin Zip
-      #   run: zip gimp-segany-gimp2.zip seganyplugin_GIMP2.py seganybridge_GIMP2_SAM1.py
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/checkout@v4
         with:
-          name: Latest Development Build
-          body: |
-            This release contains the latest development builds of the GIMP plugins.
-          draft: false
-          prerelease: true
-          files: |
-            gimp-segany-gimp3.zip
-            # gimp-segany-gimp2.zip
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Release via semantic-release
+        uses: cycjimmy/semantic-release-action@v5
+        id: release
+        with:
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/exec
+            @semantic-release/git
+            conventional-changelog-conventionalcommits
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

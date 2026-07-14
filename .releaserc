@@ -1,0 +1,64 @@
+{
+  "branches": [
+    "main",
+    {
+      "name": "dev",
+      "prerelease": true
+    }
+  ],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer", {
+        "preset": "conventionalcommits",
+        "releaseRules": [
+          { "type": "fix", "release": "patch" },
+          { "type": "feat", "release": "minor" },
+          { "type": "perf", "release": "patch" },
+          { "type": "refactor", "release": "patch" }
+        ]
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator", {
+        "preset": "conventionalcommits",
+        "presetConfig": {
+          "types": [
+            { "type": "fix", "section": "🐛 Bug Fixes", "hidden": false },
+            { "type": "feat", "section": "✨ New Features", "hidden": false },
+            { "type": "perf", "section": "🔧 Improvements", "hidden": false },
+            { "type": "refactor", "section": "♻️ Refactoring", "hidden": false }
+          ]
+        }
+      }
+    ],
+    [
+      "@semantic-release/changelog", {
+        "changelogFile": "CHANGELOG.md"
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "rm -rf dist seganyplugin && mkdir -p dist seganyplugin && cp seganyplugin.py seganybridge.py seganyplugin/ && zip -r dist/gimp-segany-gimp3.zip seganyplugin && rm -rf seganyplugin"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "CHANGELOG.md"
+        ],
+        "message": "chore: Release v${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          { "path": "dist/gimp-segany-gimp3.zip", "label": "GIMP 3 plugin — gimp-segany-gimp3.zip" }
+        ],
+        "successComment": false
+      }
+    ]
+  ]
+}
