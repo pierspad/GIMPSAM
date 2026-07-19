@@ -1,52 +1,57 @@
 # ---------------------------------------------------------------------------
-# Release (semantic-release) — stesso design di vesta/LazyGimp.
-#
-# Ogni push su main/dev analizza i conventional commits (feat → minor,
-# fix/perf/refactor → patch, feat!/BREAKING CHANGE → major):
+# Release — semantic-release on every push to main (and dev pre-releases
+# from dev). Conventional commits drive the version bump, changelog, tag,
+# GitHub release with assets, and the automatic backmerge main → dev.
+# Same design as LazyGimp's pipeline.
 #   - main → release stabile (vX.Y.Z), marcata Latest su GitHub
 #   - dev  → prerelease (vX.Y.Z-dev.N), marcata Pre-release, mai Latest
-#
-# La release include lo zip del plugin GIMP 3 buildato in prepareCmd
-# (vedi .releaserc). Niente più tag manuali.
 # ---------------------------------------------------------------------------
-name: Release (semantic-release)
+name: Release
 
 on:
   push:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
   workflow_dispatch:
-
-concurrency:
-  group: release
-  cancel-in-progress: false
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: lts/*
 
-      - name: Release via semantic-release
-        uses: cycjimmy/semantic-release-action@v5
-        id: release
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          extra_plugins: |
-            @semantic-release/changelog
-            @semantic-release/exec
-            @semantic-release/git
-            conventional-changelog-conventionalcommits
+          python-version: "3.12"
+
+      - name: Install asset build prerequisites
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y python3-tk zip
+          pip install pyinstaller pillow
+
+      - name: Install release tooling
+        run: npm install --no-audit --no-fund
+
+      - name: Semantic release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release

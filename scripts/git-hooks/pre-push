@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# pre-push — a STAGE_ONLY release-asset build (the CI "build" job minus
+# PyInstaller): catches moved/missing-file breakage before the push that
+# would trigger a real release.
+#
+# Enable once per clone:  bash scripts/setup_hooks.sh
+# Bypass:  git push --no-verify
+# ---------------------------------------------------------------------------
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-push: dry-run of the release asset staging (STAGE_ONLY=1)..."
+STAGE_ONLY=1 bash scripts/build_release_assets.sh 0.0.0-local >/dev/null \
+  || { echo "pre-push: release asset staging failed — CI would go red on this push" >&2; exit 1; }
+
+if command -v actionlint >/dev/null 2>&1; then
+  actionlint || { echo "pre-push: actionlint failed" >&2; exit 1; }
+fi
+
+echo "pre-push: OK"

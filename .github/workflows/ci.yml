@@ -1,0 +1,90 @@
+# ---------------------------------------------------------------------------
+# CI — every pull request (and push to main/dev) must pass:
+#   * ruff (lint) on the gimpsam package and tests
+#   * unit/smoke tests on every supported Python (imports, CLI, registry,
+#     local plug-in source resolution)
+#   * a real build of the release assets (zipapp + PyInstaller binary)
+#   * actionlint on the workflows themselves
+# (installer.py — the legacy Tk wizard — and the plug-in files run inside
+# GIMP's own Python and are exercised by tools/run_checks.sh instead.)
+# ---------------------------------------------------------------------------
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: ruff
+        run: |
+          pip install ruff
+          ruff check gimpsam tests
+
+  tests:
+    name: Tests (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Smoke tests (headless)
+        run: python -m unittest discover -s tests -v
+
+      - name: Byte-compile the package
+        run: python -m compileall -q gimpsam
+
+  build:
+    name: Build release assets (dry run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y python3-tk zip
+          pip install pyinstaller pillow
+
+      - name: Build assets
+        run: bash scripts/build_release_assets.sh 0.0.0-ci
+
+      - name: Assets must actually run
+        run: |
+          ./dist/gimpsam.pyz --help
+          ./dist/gimpsam.pyz status
+          test -x dist/gimpsam-linux-x86_64
+
+  workflows:
+    name: Lint workflows (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: actionlint
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: -color
