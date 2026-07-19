@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/pierspad/GIMPSAM/compare/v1.1.0...v1.1.1) (2026-07-19)
+
+### 🐛 Bug Fixes
+
+* SAM families build once and repack for flicker-free toggling; headers in TEXT color with (N) shortcuts; model shortcuts show [Shift N] ([202c8f4](https://github.com/pierspad/GIMPSAM/commit/202c8f432539e40c19ab184ec7089757d0891352))
+
 ## [1.1.0](https://github.com/pierspad/GIMPSAM/compare/v1.0.1...v1.1.0) (2026-07-19)
 
 ### ✨ Features
