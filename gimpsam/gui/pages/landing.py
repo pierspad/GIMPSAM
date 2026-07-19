@@ -170,13 +170,13 @@ class LandingPage:
         icon_canvas(center, "warn", color=TEXT, size=64, bg=BG).pack(pady=(0, 16))
 
         tk.Label(center, text="GIMP is not installed", bg=BG, fg=TEXT, font=F_HERO).pack()
-        autowrap_label(
+        tk.Label(
             center,
-            "GIMPSAM requires a working GIMP installation on your system to manage its plug-ins.\n\n"
-            "Please install GIMP first using your system's package manager (e.g., via pacman or apt) "
-            "or download the official GIMP AppImage into your Applications folder.\n\n"
-            "Once GIMP is installed, please restart this installer.",
-            bg=BG, font=F_BODY, justify="center"
+            text="GIMPSAM requires a working GIMP installation on your system to manage its plug-ins.\n\n"
+                 "Please install GIMP first using your system's package manager (e.g., via pacman or apt) "
+                 "or download the official GIMP AppImage into your Applications folder.\n\n"
+                 "Once GIMP is installed, please restart this installer.",
+            bg=BG, fg=TEXT_MUTED, font=F_BODY, justify="center", wraplength=600
         ).pack(fill="x", pady=(14, 24))
 
         exit_btn = RoundedButton(center, "Exit Installer", variant="primary", width=220, height=40,
