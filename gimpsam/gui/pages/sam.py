@@ -7,7 +7,7 @@ is what keeps this page from flashing on every click."""
 
 from __future__ import annotations
 
-from ...backend import (backend_ready, install_sam3_transformers, install_sam_backend,
+from ...backend import (backend_ready, install_sam_backend,
                         remove_sam_backend, write_sam_info)
 from ...compat import ctk, tk
 from ...constants import TORCH_INDEX_URLS
@@ -140,8 +140,7 @@ class SamPage:
     def _render_sam_body(self, parent):
         setup_install_key = "sam_setup:install"
 
-        model_widgets: list[tuple] = []       # (card, right_canvas, spec, installed)
-        queue_all_buttons: list = []
+
 
         # -- PyTorch build selector card --
         card = RoundedCard(parent)

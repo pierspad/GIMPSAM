@@ -11,10 +11,11 @@ cd "$(git rev-parse --show-toplevel)"
 
 fail() { echo "pre-commit: $1 failed — fix it (or use --no-verify to bypass)" >&2; exit 1; }
 
-if command -v ruff >/dev/null 2>&1; then
-  ruff check gimpsam tests || fail "ruff"
+RUFF="$(command -v ruff 2>/dev/null || echo "${HOME}/.local/bin/ruff")"
+if [[ -x "$RUFF" ]]; then
+  "$RUFF" check gimpsam tests || fail "ruff"
 else
-  echo "pre-commit: ruff not installed — skipping lint (pip install ruff)" >&2
+  echo "pre-commit: ruff not installed — skipping lint (pipx install ruff)" >&2
 fi
 
 python3 -m compileall -q gimpsam || fail "compileall"
