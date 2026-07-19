@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/pierspad/GIMPSAM/compare/v1.0.0...v1.0.1) (2026-07-19)
+
+### 🐛 Bug Fixes
+
+* resolve NameError for F_ITEM_TITLE and fix black overlay bug on Linux ([6dd1086](https://github.com/pierspad/GIMPSAM/commit/6dd10860a5ebaf774f72ee37ec126cf1a7d1ba2b))
+
 ## 1.0.0 (2026-07-19)
 
 ### ⚠ BREAKING CHANGES
