@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/pierspad/GIMPSAM/compare/v1.0.1...v1.1.0) (2026-07-19)
+
+### ✨ Features
+
+* implement dynamic SAM category reordering, arrow navigation, PageUp/PageDown, and category/model shortcuts ([2fde1d0](https://github.com/pierspad/GIMPSAM/commit/2fde1d03de4be1d609740a803200aa7be4220c93))
+
 ## [1.0.1](https://github.com/pierspad/GIMPSAM/compare/v1.0.0...v1.0.1) (2026-07-19)
 
 ### 🐛 Bug Fixes
