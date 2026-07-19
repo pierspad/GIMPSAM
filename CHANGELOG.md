@@ -1,3 +1,9 @@
+## [1.1.2](https://github.com/pierspad/GIMPSAM/compare/v1.1.1...v1.1.2) (2026-07-19)
+
+### 🐛 Bug Fixes
+
+* remove unused imports/vars (ruff F401/F841); pre-commit hook finds pipx-installed ruff ([727a1bb](https://github.com/pierspad/GIMPSAM/commit/727a1bbc94c5bfd2d40eae5d62abfe8147bc2abd))
+
 ## [1.1.1](https://github.com/pierspad/GIMPSAM/compare/v1.1.0...v1.1.1) (2026-07-19)
 
 ### 🐛 Bug Fixes
