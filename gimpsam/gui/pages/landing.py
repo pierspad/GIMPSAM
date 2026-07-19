@@ -13,7 +13,7 @@ from ..dialogs import themed_confirm, themed_info
 from ..helpers import autowrap_label
 from ..icons import icon_canvas
 from ..state import anything_installed, status_lines
-from ..theme import BG, CARD_BG, F_BODY, F_CARD_TITLE, F_HERO, F_SMALL, F_SUBTITLE, SUCCESS, TEXT, TEXT_MUTED
+from ..theme import BG, CARD_BG, F_BODY, F_CARD_TITLE, F_HERO, F_SMALL, F_SUBTITLE, SUCCESS, TEXT, TEXT_MUTED, F_ITEM_TITLE
 from ..widgets import ModernCheckbox, RoundedButton, RoundedCard, bind_click_recursive
 from ...compat import tk
 import os

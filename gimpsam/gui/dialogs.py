@@ -22,9 +22,13 @@ def themed_dialog(root, title, message, kind="info"):
     overlay = tk.Toplevel(root)
     overlay.overrideredirect(True)
     overlay.configure(bg="black")
-    overlay.attributes("-alpha", 0.5)  # 50% opacity/dimming
     overlay.geometry(f"{rw}x{rh}+{rx}+{ry}")
     overlay.transient(root)
+    try:
+        overlay.update()
+        overlay.attributes("-alpha", 0.5)  # 50% opacity/dimming
+    except Exception:
+        pass
     
     def sync_position(event=None):
         if root.winfo_exists() and overlay.winfo_exists():
@@ -162,9 +166,13 @@ class TkPasswordPrompt:
         overlay = tk.Toplevel(root)
         overlay.overrideredirect(True)
         overlay.configure(bg="black")
-        overlay.attributes("-alpha", 0.5)  # 50% opacity/dimming
         overlay.geometry(f"{rw}x{rh}+{rx}+{ry}")
         overlay.transient(root)
+        try:
+            overlay.update()
+            overlay.attributes("-alpha", 0.5)  # 50% opacity/dimming
+        except Exception:
+            pass
         
         def sync_position(event=None):
             if root.winfo_exists() and overlay.winfo_exists():
