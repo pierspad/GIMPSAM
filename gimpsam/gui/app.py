@@ -157,9 +157,19 @@ class GimpSamApp(LandingPage, SamPage, InstallProgressPage):
                 self.start_quick_setup()
 
         elif self.current_screen == "sam":
-            if key in ("left", "escape", "backspace"):
+            if key == "prior":
+                scroller = getattr(self, "_sam_scroller", None)
+                if scroller:
+                    scroller.page_up()
+                return
+            elif key == "next":
+                scroller = getattr(self, "_sam_scroller", None)
+                if scroller:
+                    scroller.page_down()
+                return
+            elif key in ("left", "escape", "backspace", "up"):
                 self._sam_back()
-            elif key in ("return", "space"):
+            elif key in ("return", "space", "right", "down"):
                 self._sam_start_install()
             elif key == "t":
                 entry = getattr(self, "_hf_token_entry", None)
@@ -173,12 +183,51 @@ class GimpSamApp(LandingPage, SamPage, InstallProgressPage):
                         combo._clicked()
                     except Exception:
                         pass
-            elif key in ("a", "b", "h", "1", "2", "3", "4", "5"):
-                handler = getattr(self, "_sam_cards", {}).get({
-                    "a": "queue_all_sam1", "b": "queue_all_sam2", "h": "sam3",
-                    "1": "sam_model:sam_vit_b", "2": "sam_model:sam_vit_l",
-                    "3": "sam_model:sam_vit_h", "4": "sam_model:sam2_hiera_tiny",
-                    "5": "sam3",
-                }.get(key, ""))
-                if handler:
-                    handler()
+            else:
+                is_shift = (event.state & 0x0001) != 0
+                shift_num = None
+                if key in ("exclam", "1"):
+                    shift_num = 1
+                elif key in ("at", "quotedbl", "2"):
+                    shift_num = 2
+                elif key in ("numbersign", "sterling", "3"):
+                    shift_num = 3
+                elif key in ("dollar", "4"):
+                    shift_num = 4
+                
+                if is_shift and shift_num is not None:
+                    active_fam = getattr(self, "_sam_expanded_family", "SAM1")
+                    if active_fam == "SAM1":
+                        model_keys = ["sam_vit_b", "sam_vit_l", "sam_vit_h"]
+                        if shift_num <= len(model_keys):
+                            handler = getattr(self, "_sam_cards", {}).get(f"sam_model:{model_keys[shift_num - 1]}")
+                            if handler:
+                                handler()
+                    elif active_fam == "SAM2":
+                        model_keys = ["sam2_hiera_tiny", "sam2_hiera_small", "sam2_hiera_base_plus", "sam2_hiera_large"]
+                        if shift_num <= len(model_keys):
+                            handler = getattr(self, "_sam_cards", {}).get(f"sam_model:{model_keys[shift_num - 1]}")
+                            if handler:
+                                handler()
+                    elif active_fam == "SAM3":
+                        if shift_num == 1:
+                            handler = getattr(self, "_sam_cards", {}).get("sam3")
+                            if handler:
+                                handler()
+                    return
+
+                if not is_shift:
+                    if key == "1":
+                        self.show_sam_category("SAM1")
+                    elif key == "2":
+                        self.show_sam_category("SAM2")
+                    elif key == "3":
+                        self.show_sam_category("SAM3")
+                    elif key == "a":
+                        handler = getattr(self, "_sam_cards", {}).get("queue_all_sam1")
+                        if handler:
+                            handler()
+                    elif key == "b":
+                        handler = getattr(self, "_sam_cards", {}).get("queue_all_sam2")
+                        if handler:
+                            handler()

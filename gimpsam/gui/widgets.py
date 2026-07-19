@@ -271,6 +271,20 @@ class ScrollableFrame(ctk.CTkScrollableFrame):
                     if self._parent_canvas.yview() != (0.0, 1.0):
                         self._parent_canvas.yview_scroll(-1 * multiplier if event.num == 4 else 1 * multiplier, "units")
 
+    def page_up(self):
+        try:
+            if self._parent_canvas.winfo_exists():
+                self._parent_canvas.yview_scroll(-1, "pages")
+        except Exception:
+            pass
+
+    def page_down(self):
+        try:
+            if self._parent_canvas.winfo_exists():
+                self._parent_canvas.yview_scroll(1, "pages")
+        except Exception:
+            pass
+
 
 def bind_click_recursive(widget, handler, skip=()):
     if widget in skip:
