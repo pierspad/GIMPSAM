@@ -54,10 +54,10 @@ class SamPage:
 
         nav = tk.Frame(outer, bg=BG)
         nav.pack(fill="x", padx=26, pady=(10, 16), side="bottom")
-        RoundedButton(nav, "← Back", variant="secondary", width=110,
+        RoundedButton(nav, "← Back [Backspace]", variant="secondary", width=160,
                       command=self._sam_back).pack(side="left")
-        self._sam_install_btn = RoundedButton(nav, "Install (0)", icon="bolt", variant="primary",
-                                              width=180, command=self._sam_start_install)
+        self._sam_install_btn = RoundedButton(nav, "Install (0) [Enter]", icon="bolt", variant="primary",
+                                              width=220, command=self._sam_start_install)
         self._sam_install_btn.pack(side="right")
         self._sam_install_btn.set_enabled(False)
 
@@ -84,7 +84,7 @@ class SamPage:
     def _sam_update_install_btn(self):
         n = len(self.plan)
         if self._sam_install_btn is not None and self._sam_install_btn.winfo_exists():
-            self._sam_install_btn.set_text(f"Install ({n})")
+            self._sam_install_btn.set_text(f"Install ({n}) [Enter]")
             self._sam_install_btn.set_enabled(n > 0)
 
     # ---- plan runners ----------------------------------------------------

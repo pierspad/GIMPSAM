@@ -81,12 +81,12 @@ def themed_dialog(root, title, message, kind="info"):
     win.bind("<Button-1>", on_click_anywhere)
 
     if kind == "confirm":
-        RoundedButton(btns, "Cancel", variant="secondary", width=90, command=lambda: close(False)).pack(
+        RoundedButton(btns, "Cancel\n[Esc]", variant="secondary", width=100, height=48, command=lambda: close(False)).pack(
             side="left", padx=(0, 8))
-        RoundedButton(btns, "Confirm", variant="danger", icon="trash", width=120,
+        RoundedButton(btns, "Confirm\n[Enter]", variant="danger", icon="trash", width=130, height=48,
                       command=lambda: close(True)).pack(side="left")
     else:
-        RoundedButton(btns, "OK", variant="primary", width=90, command=lambda: close(True)).pack(side="left")
+        RoundedButton(btns, "OK\n[Enter]", variant="primary", width=100, height=48, command=lambda: close(True)).pack(side="left")
         
     win.bind("<Escape>", lambda _e: close(False if kind == "confirm" else True))
     win.bind("<Return>", lambda _e: close(True))

@@ -157,7 +157,7 @@ class GimpSamApp(LandingPage, SamPage, InstallProgressPage):
                 self.start_quick_setup()
 
         elif self.current_screen == "sam":
-            if key in ("left", "escape"):
+            if key in ("left", "escape", "backspace"):
                 self._sam_back()
             elif key in ("return", "space"):
                 self._sam_start_install()
