@@ -3,10 +3,12 @@
 #   * ruff (lint) on the gimpsam package and tests
 #   * unit/smoke tests on every supported Python (imports, CLI, registry,
 #     local plug-in source resolution)
+#   * a GUI smoke test that opens the real CustomTkinter app under Xvfb
+#     and walks every screen
 #   * a real build of the release assets (zipapp + PyInstaller binary)
 #   * actionlint on the workflows themselves
-# (installer.py — the legacy Tk wizard — and the plug-in files run inside
-# GIMP's own Python and are exercised by tools/run_checks.sh instead.)
+# (the plug-in files run inside GIMP's own Python and are exercised by
+# tools/run_checks.sh instead.)
 # ---------------------------------------------------------------------------
 name: CI
 
@@ -32,7 +34,7 @@ jobs:
       - name: ruff
         run: |
           pip install ruff
-          ruff check gimpsam tests
+          ruff check gimpsam installer.py tests
 
   tests:
     name: Tests (py${{ matrix.python }})
@@ -52,7 +54,25 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Byte-compile the package
-        run: python -m compileall -q gimpsam
+        run: python -m compileall -q gimpsam installer.py
+
+  gui-smoke:
+    name: GUI smoke (Tk under Xvfb)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tk + Xvfb + GUI deps
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y python3-tk xvfb
+          pip install customtkinter pillow
+
+      - name: Open the real GUI and walk every screen
+        run: xvfb-run -a python tests/gui_smoke.py
 
   build:
     name: Build release assets (dry run)
@@ -67,7 +87,7 @@ jobs:
       - name: Install build prerequisites
         run: |
           sudo apt-get update -q && sudo apt-get install -y python3-tk zip
-          pip install pyinstaller pillow
+          pip install pyinstaller customtkinter pillow
 
       - name: Build assets
         run: bash scripts/build_release_assets.sh 0.0.0-ci

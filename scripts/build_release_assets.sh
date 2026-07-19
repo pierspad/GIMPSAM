@@ -82,6 +82,7 @@ chmod +x "${DIST}/gimpsam.pyz"
   --specpath "${STAGE}/pyi-spec" \
   --paths "$BUNDLE" \
   --hidden-import tkinter \
+  --collect-all customtkinter \
   --collect-submodules PIL \
   "${BUNDLE}/installer.py"
 

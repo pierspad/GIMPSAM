@@ -9,6 +9,7 @@ from .job import Job
 from .models import MODEL_BY_KEY, MODEL_REGISTRY, model_installed, model_path
 from .plugin import install_plugin, plugin_installed, remove_plugin, write_plugin_settings
 from .sam3 import download_sam3, remove_sam3, sam3_failure_message
+from .util import _self_destruct_if_ephemeral
 import argparse
 import os
 import shutil
@@ -150,10 +151,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="gimpsam",
         description="Segment Anything for GIMP — plug-in, Python backend, and SAM models. "
-                     "Headless CLI; run installer.py for the guided GUI.",
+                     "No subcommand opens the GUI; every action is also a plain CLI command.",
     )
     p.add_argument("--version", action="version", version=__version__)
-    sub = p.add_subparsers(dest="command", required=True)
+    p.add_argument("--ephemeral", action="store_true", help="self-delete this file when the GUI closes")
+    sub = p.add_subparsers(dest="command")
 
     sub.add_parser("status", help="show what's installed").set_defaults(func=cmd_status)
 
@@ -204,4 +206,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_arg_parser().parse_args()
-    sys.exit(args.func(args))
+    if getattr(args, "command", None) is None:
+        from .gui import launch_gui
+        launch_gui()
+        return
+    rc = args.func(args)
+    _self_destruct_if_ephemeral()
+    sys.exit(rc)

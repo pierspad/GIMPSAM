@@ -17,8 +17,14 @@ class ImportTests(unittest.TestCase):
         import importlib
 
         for mod in ("constants", "util", "job", "gimp_dirs", "models",
-                    "hardware", "backend", "sam3", "plugin", "cli"):
+                    "hardware", "backend", "sam3", "plugin", "compat",
+                    "plan", "cli", "gui"):
             importlib.import_module(f"gimpsam.{mod}")
+
+    def test_gui_is_optional(self):
+        """gui must import (not crash) even when Tk is unavailable."""
+        from gimpsam import compat, gui  # noqa: F401
+        self.assertIsInstance(compat._TK_OK, bool)
 
 
 class ModelRegistryTests(unittest.TestCase):
