@@ -11,23 +11,74 @@ import threading
 
 
 def themed_dialog(root, title, message, kind="info"):
+    result = {"value": None}
+    
+    # 1. Create transparent dark overlay
+    rx = root.winfo_rootx()
+    ry = root.winfo_rooty()
+    rw = root.winfo_width()
+    rh = root.winfo_height()
+    
+    overlay = tk.Toplevel(root)
+    overlay.overrideredirect(True)
+    overlay.configure(bg="black")
+    overlay.attributes("-alpha", 0.5)  # 50% opacity/dimming
+    overlay.geometry(f"{rw}x{rh}+{rx}+{ry}")
+    overlay.transient(root)
+    
+    def sync_position(event=None):
+        if root.winfo_exists() and overlay.winfo_exists():
+            ox = root.winfo_rootx()
+            oy = root.winfo_rooty()
+            ow = root.winfo_width()
+            oh = root.winfo_height()
+            overlay.geometry(f"{ow}x{oh}+{ox}+{oy}")
+            
+    configure_bind_id = root.bind("<Configure>", sync_position, add="+")
+    
+    # 2. Create the main dialog window
     win = tk.Toplevel(root)
     win.overrideredirect(True)
     win.attributes("-topmost", True)
-    win.configure(bg=CARD_BG)
-    win.transient(root)
+    win.configure(bg=CARD_BG, borderwidth=0, highlightthickness=0)  # Remove default square borders
+    win.transient(overlay)
+    
     card = RoundedCard(win, radius=18, pad=20, width=380)
     card.pack(padx=0, pady=0)
     tk.Label(card.body, text=title, bg=CARD_BG, fg=TEXT, font=F_DIALOG_TITLE).pack(anchor="w")
     autowrap_label(card.body, message, fg=TEXT_MUTED, bg=CARD_BG, font=F_BODY).pack(
         anchor="w", fill="x", pady=(10, 18))
-    result = {"value": None}
+        
     btns = tk.Frame(card.body, bg=CARD_BG)
     btns.pack(anchor="e")
 
     def close(v):
-        result["value"] = v
-        win.destroy()
+        if result["value"] is None:
+            result["value"] = v
+            try:
+                root.unbind("<Configure>", configure_bind_id)
+            except Exception:
+                pass
+            if win and win.winfo_exists():
+                win.destroy()
+            if overlay and overlay.winfo_exists():
+                overlay.destroy()
+
+    # Click on the overlay to close (acts as Cancel / OK)
+    overlay.bind("<Button-1>", lambda _e: close(False if kind == "confirm" else True))
+
+    # Grab application events and detect clicks outside the dialog window
+    def on_click_anywhere(event):
+        if not win.winfo_exists():
+            return
+        wx = win.winfo_rootx()
+        wy = win.winfo_rooty()
+        ww = win.winfo_width()
+        wh = win.winfo_height()
+        if not (wx <= event.x_root <= wx + ww and wy <= event.y_root <= wy + wh):
+            close(False if kind == "confirm" else True)
+            
+    win.bind("<Button-1>", on_click_anywhere)
 
     if kind == "confirm":
         RoundedButton(btns, "Cancel", variant="secondary", width=90, command=lambda: close(False)).pack(
@@ -42,9 +93,11 @@ def themed_dialog(root, title, message, kind="info"):
     
     card.finalize()
     win.update_idletasks()
-    rx, ry, rw, rh = root.winfo_rootx(), root.winfo_rooty(), root.winfo_width(), root.winfo_height()
+    
+    # Position win in the center of root
     ww, wh = win.winfo_reqwidth(), win.winfo_reqheight()
     win.geometry(f"+{rx + max(0, (rw - ww) // 2)}+{ry + max(0, (rh - wh) // 2)}")
+    
     win.focus_force()
     win.grab_set()
     win.wait_window()
@@ -62,7 +115,7 @@ def show_snackbar(app, message: str, tone: str = "warn", duration_ms: int = 2200
     win = tk.Toplevel(root)
     win.overrideredirect(True)
     win.attributes("-topmost", True)
-    win.configure(bg=BG)
+    win.configure(bg=BG, borderwidth=0, highlightthickness=0)
     card = RoundedCard(win, bg=bgc, border=bgc, radius=14, pad=14)
     card.pack()
     row = tk.Frame(card.body, bg=bgc)
@@ -99,11 +152,37 @@ class TkPasswordPrompt:
         return result.get("pw") or ""
 
     def _show(self, prompt_text: str) -> str:
+        root = self.root
+        rx = root.winfo_rootx()
+        ry = root.winfo_rooty()
+        rw = root.winfo_width()
+        rh = root.winfo_height()
+        
+        # 1. Create transparent dark overlay
+        overlay = tk.Toplevel(root)
+        overlay.overrideredirect(True)
+        overlay.configure(bg="black")
+        overlay.attributes("-alpha", 0.5)  # 50% opacity/dimming
+        overlay.geometry(f"{rw}x{rh}+{rx}+{ry}")
+        overlay.transient(root)
+        
+        def sync_position(event=None):
+            if root.winfo_exists() and overlay.winfo_exists():
+                ox = root.winfo_rootx()
+                oy = root.winfo_rooty()
+                ow = root.winfo_width()
+                oh = root.winfo_height()
+                overlay.geometry(f"{ow}x{oh}+{ox}+{oy}")
+                
+        configure_bind_id = root.bind("<Configure>", sync_position, add="+")
+
+        # 2. Create main password prompt window
         win = tk.Toplevel(self.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
-        win.configure(bg=CARD_BG)
-        win.transient(self.root)
+        win.configure(bg=CARD_BG, borderwidth=0, highlightthickness=0)  # Remove default square borders
+        win.transient(overlay)
+        
         card = RoundedCard(win, radius=18, pad=20, width=420)
         card.pack(padx=0, pady=0)
         tk.Label(card.body, text="Administrator password", bg=CARD_BG, fg=TEXT,
@@ -117,13 +196,38 @@ class TkPasswordPrompt:
         pw_var = tk.StringVar()
         entry = ctk.CTkEntry(card.body, textvariable=pw_var, show="•", width=360)
         entry.pack(anchor="w", pady=(0, 16))
-        result = {"pw": ""}
+        
+        result = {}
         btns = tk.Frame(card.body, bg=CARD_BG)
         btns.pack(anchor="e")
 
         def close(ok: bool):
-            result["pw"] = pw_var.get() if ok else ""
-            win.destroy()
+            if "pw" not in result:
+                result["pw"] = pw_var.get() if ok else ""
+                try:
+                    root.unbind("<Configure>", configure_bind_id)
+                except Exception:
+                    pass
+                if win and win.winfo_exists():
+                    win.destroy()
+                if overlay and overlay.winfo_exists():
+                    overlay.destroy()
+
+        # Click on the overlay to close (acts as Cancel)
+        overlay.bind("<Button-1>", lambda _e: close(False))
+
+        # Grab application events and detect clicks outside the dialog window
+        def on_click_anywhere(event):
+            if not win.winfo_exists():
+                return
+            wx = win.winfo_rootx()
+            wy = win.winfo_rooty()
+            ww = win.winfo_width()
+            wh = win.winfo_height()
+            if not (wx <= event.x_root <= wx + ww and wy <= event.y_root <= wy + wh):
+                close(False)
+                
+        win.bind("<Button-1>", on_click_anywhere)
 
         RoundedButton(btns, "Cancel", variant="secondary", width=90,
                       command=lambda: close(False)).pack(side="left", padx=(0, 8))
@@ -133,12 +237,11 @@ class TkPasswordPrompt:
         win.bind("<Escape>", lambda _e: close(False))
         card.finalize()
         win.update_idletasks()
-        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
-        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        
         ww, wh = win.winfo_reqwidth(), win.winfo_reqheight()
         win.geometry(f"+{rx + max(0, (rw - ww) // 2)}+{ry + max(0, (rh - wh) // 2)}")
         entry.focus_set()
         win.focus_force()
         win.grab_set()
         win.wait_window()
-        return result["pw"]
+        return result.get("pw") or ""

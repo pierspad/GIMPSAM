@@ -62,7 +62,7 @@ def detect_hardware() -> Hardware:
 
 
 def recommended_model_key(hw: Hardware) -> str:
-    return "sam2_hiera_base_plus" if (hw.gpu and hw.gpu.get("driver_ready")) else "sam2_hiera_small"
+    return "sam2_hiera_small"
 
 
 def recommended_torch_index(hw: Hardware) -> str:

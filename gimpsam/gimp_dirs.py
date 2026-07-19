@@ -13,8 +13,19 @@ import subprocess
 # (3.0, 3.2, ...) is always resolved at runtime.
 # ---------------------------------------------------------------------------
 
+import glob
+
 def find_gimp_binary() -> Optional[str]:
     return shutil.which("gimp") or shutil.which("gimp-3.0") or shutil.which("gimp-2.10")
+
+
+def gimp_appimage_present() -> bool:
+    appimage_dir = os.environ.get("LAZYGIMP_APPIMAGE_DIR") or os.path.join(os.path.expanduser("~"), "Applications")
+    return len(glob.glob(os.path.join(appimage_dir, "GIMP-*.AppImage"))) > 0 or os.path.isfile(os.path.join(appimage_dir, "GIMP.AppImage"))
+
+
+def is_gimp_installed() -> bool:
+    return bool(find_gimp_binary()) or gimp_appimage_present()
 
 
 def gimp_version_string() -> Optional[str]:

@@ -96,6 +96,21 @@ def is_sam3_path(path):
     return path is not None and os.path.basename(path.rstrip("/")) == SAM3_MODEL_DIRNAME
 
 
+def safe_combo_index(options, current, default=0):
+    """Index of `current` in `options`, or `default` if it isn't there.
+
+    Persisted settings can legitimately hold a value that isn't one of
+    THIS combo's own choices — e.g. get_values() writes segType="Text"
+    when SAM3 is selected, but the Segmentation Type combo only ever
+    offers ["Auto", "Box", "Selection"] (SAM3 hides it in favour of the
+    text prompt field). Loading that same config back with a non-SAM3
+    model previously crashed the whole dialog with a ValueError from
+    list.index() before a single widget had even been shown. Same risk
+    for any option list that can change between plug-in versions or be
+    hand-edited in segany_settings.json."""
+    return options.index(current) if current in options else default
+
+
 def model_friendly_label(path):
     if is_sam3_path(path):
         return MODEL_FRIENDLY_LABELS["sam3"]
@@ -163,8 +178,15 @@ class DialogValue:
             "maxAutoDim": self.maxAutoDim,
             "textPrompt": self.textPrompt,
         }
-        with open(filepath, "w") as f:
+        # Write-then-rename: os.replace() is atomic on the same filesystem,
+        # so a crash or kill -9 mid-write can never leave segany_settings.json
+        # half-written (which json.load() in __init__ already tolerates via
+        # its broad except, but there's no reason to rely on that when the
+        # fix is one temp file).
+        tmp_path = filepath + ".tmp"
+        with open(tmp_path, "w") as f:
             json.dump(data, f)
+        os.replace(tmp_path, filepath)
 
 
 class OptionsDialog(Gtk.Dialog):
@@ -249,7 +271,7 @@ class OptionsDialog(Gtk.Dialog):
         self.segTypeVals = ["Auto", "Box", "Selection"]
         for value in self.segTypeVals:
             self.segTypeDropDown.append_text(value)
-        self.segTypeDropDown.set_active(self.segTypeVals.index(self.values.segType))
+        self.segTypeDropDown.set_active(safe_combo_index(self.segTypeVals, self.values.segType))
         grid.attach(self.segTypeLbl, 0, row, 1, 1)
         grid.attach(self.segTypeDropDown, 1, row, 1, 1)
         row += 1
@@ -268,7 +290,7 @@ class OptionsDialog(Gtk.Dialog):
         self.maskTypeVals = ["Multiple", "Single"]
         for value in self.maskTypeVals:
             self.maskTypeDropDown.append_text(value)
-        self.maskTypeDropDown.set_active(self.maskTypeVals.index(self.values.maskType))
+        self.maskTypeDropDown.set_active(safe_combo_index(self.maskTypeVals, self.values.maskType))
         grid.attach(self.maskTypeLbl, 0, row, 1, 1)
         grid.attach(self.maskTypeDropDown, 1, row, 1, 1)
         row += 1
@@ -314,8 +336,26 @@ class OptionsDialog(Gtk.Dialog):
         pre_python = self.values.pythonPath or self._discovered_python
         if pre_python is not None:
             self.pythonFileBtn.set_filename(pre_python)
+        self.pythonOpenBtn = Gtk.Button.new_from_icon_name(
+            "folder-open-symbolic", Gtk.IconSize.BUTTON
+        )
+        self.pythonOpenBtn.set_tooltip_text("Open the folder containing this interpreter")
+        self.pythonOpenBtn.connect(
+            "clicked", lambda *_: self._open_containing_folder(self.pythonFileBtn.get_filename())
+        )
         egrid.attach(pythonFileLbl, 0, erow, 1, 1)
         egrid.attach(self.pythonFileBtn, 1, erow, 1, 1)
+        egrid.attach(self.pythonOpenBtn, 2, erow, 1, 1)
+        erow += 1
+
+        # FileChooserButton truncates long paths to fit its own width, which
+        # is exactly the part the user needs when they just want to jump to
+        # that folder in a file manager — so spell it out in full underneath,
+        # selectable for copy/paste, in addition to the "open folder" button.
+        self.pythonPathLbl = Gtk.Label(xalign=0)
+        self.pythonPathLbl.set_selectable(True)
+        self.pythonPathLbl.set_line_wrap(True)
+        egrid.attach(self.pythonPathLbl, 1, erow, 2, 1)
         erow += 1
 
         # NOTE: there used to be a second "Model Type" combo here, meant as a
@@ -340,8 +380,22 @@ class OptionsDialog(Gtk.Dialog):
             if is_sam3_path(self.values.checkPtPath):
                 self.checkPtFileBtn.set_action(Gtk.FileChooserAction.SELECT_FOLDER)
             self.checkPtFileBtn.set_filename(self.values.checkPtPath)
+        self.checkPtOpenBtn = Gtk.Button.new_from_icon_name(
+            "folder-open-symbolic", Gtk.IconSize.BUTTON
+        )
+        self.checkPtOpenBtn.set_tooltip_text("Open the folder containing this model")
+        self.checkPtOpenBtn.connect(
+            "clicked", lambda *_: self._open_containing_folder(self.checkPtFileBtn.get_filename())
+        )
         egrid.attach(self.checkPtFileLbl, 0, erow, 1, 1)
         egrid.attach(self.checkPtFileBtn, 1, erow, 1, 1)
+        egrid.attach(self.checkPtOpenBtn, 2, erow, 1, 1)
+        erow += 1
+
+        self.checkPtPathLbl = Gtk.Label(xalign=0)
+        self.checkPtPathLbl.set_selectable(True)
+        self.checkPtPathLbl.set_line_wrap(True)
+        egrid.attach(self.checkPtPathLbl, 1, erow, 2, 1)
         erow += 1
 
         self.checkPtHintLbl = Gtk.Label(xalign=0)
@@ -359,7 +413,7 @@ class OptionsDialog(Gtk.Dialog):
         self.segResVals = ["Low", "Medium", "High"]
         for value in self.segResVals:
             self.segResDropDown.append_text(value)
-        self.segResDropDown.set_active(self.segResVals.index(self.values.segRes))
+        self.segResDropDown.set_active(safe_combo_index(self.segResVals, self.values.segRes, default=1))
         egrid.attach(self.segResLbl, 0, erow, 1, 1)
         egrid.attach(self.segResDropDown, 1, erow, 1, 1)
         erow += 1
@@ -406,6 +460,8 @@ class OptionsDialog(Gtk.Dialog):
         self.segTypeDropDown.connect("changed", self.update_options_visibility)
         self.modelCombo.connect("changed", self.on_model_combo_changed)
         self.checkPtFileBtn.connect("file-set", self.update_options_visibility)
+        self.pythonFileBtn.connect("file-set", lambda *_: self._refresh_path_labels())
+        self._refresh_path_labels()
         self.minMaskAreaEntry.connect("changed", self.on_min_mask_area_changed)
         self.on_min_mask_area_changed(self.minMaskAreaEntry)
         if not self.isGrayScale:
@@ -446,6 +502,40 @@ class OptionsDialog(Gtk.Dialog):
             else:
                 self.modelCombo.set_active(0)
 
+    def _refresh_path_labels(self):
+        """Spell out the full path under each FileChooserButton. The button
+        itself elides long paths down to whatever fits its fixed width —
+        exactly the information someone wants when they're trying to go
+        find that folder in a file manager, which is also why each field
+        gets its own "open folder" button right next to it."""
+
+        def markup_for(path):
+            if not path:
+                return "<small><i>(not set)</i></small>"
+            return f"<small>{GLib.markup_escape_text(path)}</small>"
+
+        py = self.pythonFileBtn.get_filename()
+        self.pythonPathLbl.set_markup(markup_for(py))
+        self.pythonOpenBtn.set_sensitive(bool(py))
+
+        ckpt = self.checkPtFileBtn.get_filename()
+        self.checkPtPathLbl.set_markup(markup_for(ckpt))
+        self.checkPtOpenBtn.set_sensitive(bool(ckpt))
+
+    def _open_containing_folder(self, path):
+        if not path:
+            return
+        # SAM3's "checkpoint" already IS the folder to open; a SAM1/SAM2
+        # checkpoint is a single file, so open its parent directory instead.
+        target = path if os.path.isdir(path) else os.path.dirname(path)
+        if not target:
+            return
+        try:
+            Gio.AppInfo.launch_default_for_uri(Gio.File.new_for_path(target).get_uri(), None)
+        except GLib.Error as e:
+            logging.warning("Could not open folder %s: %s", target, e)
+            showError(f"Could not open folder:\n{target}\n\n{e}")
+
     def on_model_combo_changed(self, widget):
         idx = self.modelCombo.get_active()
         if idx < 0 or idx >= len(self._model_paths):
@@ -461,6 +551,8 @@ class OptionsDialog(Gtk.Dialog):
         self.update_options_visibility(None)
 
     def update_options_visibility(self, widget):
+        self._refresh_path_labels()
+
         segType = self.segTypeVals[self.segTypeDropDown.get_active()]
 
         isAuto = segType == "Auto"

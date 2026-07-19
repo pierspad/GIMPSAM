@@ -54,14 +54,14 @@ class LandingPage:
         title_row = tk.Frame(manage.body, bg=CARD_BG)
         title_row.pack(anchor="w")
         icon_canvas(title_row, "gear", color=TEXT, size=22).pack(side="left", padx=(0, 8))
-        tk.Label(title_row, text="Custom setup", bg=CARD_BG, fg=TEXT, font=F_CARD_TITLE).pack(side="left")
+        tk.Label(title_row, text="Custom setup (1)", bg=CARD_BG, fg=TEXT, font=F_CARD_TITLE).pack(side="left")
         autowrap_label(
             manage.body,
             "Pick the PyTorch build and exactly which SAM models to download (or remove), "
             "then run the whole checklist in one pass.",
             bg=CARD_BG, font=F_SMALL,
         ).pack(anchor="w", fill="x", pady=(8, 16))
-        open_btn = RoundedButton(manage.body, "Open", variant="secondary", width=272, height=40,
+        open_btn = RoundedButton(manage.body, "Open (1)", variant="secondary", width=272, height=40,
                                   command=self.show_sam_setup)
         open_btn.pack(anchor="w", side="bottom")
         manage.finalize()
@@ -72,14 +72,14 @@ class LandingPage:
         title_row2 = tk.Frame(auto.body, bg=CARD_BG)
         title_row2.pack(anchor="w")
         icon_canvas(title_row2, "bolt", color=TEXT, size=22).pack(side="left", padx=(0, 8))
-        tk.Label(title_row2, text="Quick setup", bg=CARD_BG, fg=TEXT, font=F_CARD_TITLE).pack(side="left")
+        tk.Label(title_row2, text="Quick setup (2)", bg=CARD_BG, fg=TEXT, font=F_CARD_TITLE).pack(side="left")
         autowrap_label(
             auto.body,
             "Installs everything still missing: the GIMP plug-in, the Python backend (PyTorch matched "
             "to your hardware) and a recommended model. Already-installed pieces are left alone.",
             bg=CARD_BG, font=F_SMALL,
         ).pack(anchor="w", fill="x", pady=(8, 16))
-        start_btn = RoundedButton(auto.body, "Start", variant="primary", width=272, height=40,
+        start_btn = RoundedButton(auto.body, "Start (2)", variant="primary", width=272, height=40,
                                    command=self.start_quick_setup)
         start_btn.pack(anchor="w", side="bottom")
         auto.finalize()
@@ -155,3 +155,29 @@ class LandingPage:
             remove_sam_backend(job)
 
         self.show_install_progress([PlannedAction("remove_all", "Remove GIMPSAM completely", "remove", run)])
+
+    def show_gimp_missing(self):
+        self.current_screen = "gimp_missing"
+        for w in self.root_frame.winfo_children():
+            w.destroy()
+
+        wrap = tk.Frame(self.root_frame, bg=BG)
+        wrap.pack(fill="both", expand=True)
+        center = tk.Frame(wrap, bg=BG)
+        center.place(relx=0.5, rely=0.45, anchor="center")
+
+        icon_canvas(center, "warn", color=TEXT, size=64, bg=BG).pack(pady=(0, 16))
+
+        tk.Label(center, text="GIMP is not installed", bg=BG, fg=TEXT, font=F_HERO).pack()
+        autowrap_label(
+            center,
+            "GIMPSAM requires a working GIMP installation on your system to manage its plug-ins.\n\n"
+            "Please install GIMP first using your system's package manager (e.g., via pacman or apt) "
+            "or download the official GIMP AppImage into your Applications folder.\n\n"
+            "Once GIMP is installed, please restart this installer.",
+            bg=BG, font=F_BODY, justify="center"
+        ).pack(fill="x", pady=(14, 24))
+
+        exit_btn = RoundedButton(center, "Exit Installer", variant="primary", width=220, height=40,
+                                 command=self.root.destroy)
+        exit_btn.pack()

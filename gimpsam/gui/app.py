@@ -13,6 +13,7 @@ from ..compat import tk
 from ..hardware import detect_hardware
 from ..job import Job
 from ..plan import InstallPlan, PlannedAction
+from ..gimp_dirs import is_gimp_installed
 from . import theme
 from .dialogs import themed_info
 from .icons import blit_icon
@@ -41,7 +42,10 @@ class GimpSamApp(LandingPage, SamPage, InstallProgressPage):
         self.root_frame = tk.Frame(root, bg=BG)
         self.root_frame.pack(fill="both", expand=True)
         self.root.bind("<Key>", self._on_global_key)
-        self.show_landing()
+        if not is_gimp_installed():
+            self.show_gimp_missing()
+        else:
+            self.show_landing()
         self.root.after(150, self._drain_log_queue)
 
     # ---- status bar -----------------------------------------------------
