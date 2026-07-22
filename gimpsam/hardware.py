@@ -68,7 +68,9 @@ def recommended_model_key(hw: Hardware) -> str:
 def recommended_torch_index(hw: Hardware) -> str:
     if hw.gpu and hw.gpu.get("driver_ready"):
         if "NVIDIA" in hw.gpu["vendor"]:
-            return TORCH_INDEX_URLS["NVIDIA CUDA 12.8"]
+            return TORCH_INDEX_URLS["NVIDIA CUDA 13.2 (latest)"]
         if "AMD" in hw.gpu["vendor"]:
             return TORCH_INDEX_URLS["AMD ROCm 7.2 (latest)"]
+        if "Intel" in hw.gpu.get("vendor", ""):
+            return TORCH_INDEX_URLS["Intel Arc / XPU (Intel GPU)"]
     return TORCH_INDEX_URLS["CPU (universal, smaller download)"]

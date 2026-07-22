@@ -50,9 +50,10 @@ SAM3_HF_PAGE = f"https://huggingface.co/{SAM3_HF_REPO_ID}"
 # to a wheel index that doesn't exist yet for the user's GPU stack)
 TORCH_INDEX_URLS = {
     "CPU (universal, smaller download)": "https://download.pytorch.org/whl/cpu",
-    "NVIDIA CUDA 12.6": "https://download.pytorch.org/whl/cu126",
-    "NVIDIA CUDA 12.8": "https://download.pytorch.org/whl/cu128",
+    "NVIDIA CUDA 13.2 (latest)": "https://download.pytorch.org/whl/cu132",
     "NVIDIA CUDA 13.0": "https://download.pytorch.org/whl/cu130",
-    "AMD ROCm 6.4": "https://download.pytorch.org/whl/rocm6.4",
+    "NVIDIA CUDA 12.8": "https://download.pytorch.org/whl/cu128",
     "AMD ROCm 7.2 (latest)": "https://download.pytorch.org/whl/rocm7.2",
+    "AMD ROCm 6.4": "https://download.pytorch.org/whl/rocm6.4",
+    "Intel Arc / XPU (Intel GPU)": "https://download.pytorch.org/whl/xpu",
 }
