@@ -43,6 +43,12 @@ def _install_artifact_paths() -> list[str]:
 
 
 def _self_destruct_if_ephemeral() -> None:
+    # If running inside a git source repository checkout, do not self-destruct!
+    pkg_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(pkg_dir)
+    if os.path.isdir(os.path.join(root_dir, ".git")):
+        return
+
     # The env var is authoritative when set (the GUI's "delete this
     # installer" checkbox writes it, so un-ticking beats --ephemeral);
     # otherwise the CLI flag decides.
