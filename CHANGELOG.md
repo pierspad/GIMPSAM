@@ -1,3 +1,14 @@
+## [1.2.0](https://github.com/pierspad/GIMPSAM/compare/v1.1.2...v1.2.0) (2026-07-22)
+
+### ✨ Features
+
+* **constants:** update PyTorch wheel indexes with CUDA 13.2, CUDA 13.0, ROCm 7.2 and Intel Arc XPU ([f3b53f4](https://github.com/pierspad/GIMPSAM/commit/f3b53f4869c955df42eeff69ffde60cd1861bcb2))
+
+### 🐛 Bug Fixes
+
+* **gui:** fix mouse-wheel crash from a renamed CustomTkinter API ([6044717](https://github.com/pierspad/GIMPSAM/commit/6044717a2cfd5f7d2375e5548196ea251c8fc375))
+* **util:** don't self-destruct when running from a git checkout ([a2d94ab](https://github.com/pierspad/GIMPSAM/commit/a2d94abfac0bc14eedfc7a4ec1966ff033c83289))
+
 ## [1.1.2](https://github.com/pierspad/GIMPSAM/compare/v1.1.1...v1.1.2) (2026-07-19)
 
 ### 🐛 Bug Fixes
