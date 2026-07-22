@@ -247,7 +247,7 @@ class ScrollableFrame(ctk.CTkScrollableFrame):
 
     def _mouse_wheel_all(self, event):
         import sys
-        if self.check_if_master_is_canvas(event.widget):
+        if self._check_if_valid_scroll(event.widget):
             multiplier = 4
             if sys.platform.startswith("win"):
                 if self._shift_pressed:
